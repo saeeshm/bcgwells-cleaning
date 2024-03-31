@@ -4,3 +4,7 @@
 .DS_STORE
 old_ref_project/
 data/
+output/
+temp/
+*.csv
+*.txt
