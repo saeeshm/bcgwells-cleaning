@@ -32,7 +32,9 @@ numCores <- 4
 # Defining column types and names from the outset
 litho_og <- read_csv(litho_path, col_types = "ddddcccc") %>% 
   mutate(well_type = NA_character_, general_remarks = NA_character_) %>% 
-  dplyr::rename("depth_from" = from_depth, "depth_to" = to_depth)
+  dplyr::rename('record_index' = rid, 
+                "depth_from" = from_depth, 
+                "depth_to" = to_depth)
 
 # The relevant columns frmo the well dataset, which contains reference comment
 # information that will be used for subsequent data extraction.
@@ -44,7 +46,7 @@ well <- read_csv(well_path) %>% dplyr::select("wtn" = well_tag_number, comments)
 # part to them as these will be the only ones where it will be relevant to run
 # frac-yield extraction
 litho <- litho_og %>% 
-  select(wtn, 'record_index' = rid, depth_from, depth_to, lithology, matclass) %>%
+  select(wtn, record_index, depth_from, depth_to, lithology, matclass) %>%
   filter(wtn %in% unique(pull(filter(litho_og, matclass == "bedrock"), wtn)))
 
 # Adding general comment information about each well from the well table (where
@@ -158,6 +160,21 @@ out_table <- out_table %>%
   mutate(lithology_copy = NULL) %>% 
   mutate(general_remarks = general_remarks_copy) %>% 
   mutate(general_remarks_copy = NULL)
+
+# Where the classified cumulative yield values are NA, using yield values from
+# the original table if present
+out_table <- out_table |> 
+  left_join(
+    litho_og |> 
+      select(wtn, depth_from, depth_to, 
+             'wb_est' = water_bearing_estimated_flow,
+             'wb_unit' = well_yield_unit_code),
+    by=c('wtn', 'depth_from', 'depth_to')
+  ) |> 
+  # Joining any cumulative yield estimates from the original table back
+  mutate(cum_frac_yield = ifelse(is.na(cum_frac_yield), wb_est, cum_frac_yield)) |> 
+  mutate(unit = ifelse(is.na(unit), wb_unit, unit)) |> 
+  select(-wb_est, -wb_unit)
 
 # ==== Saving data to disk and deleting objects from memory ====
 write_csv(out_table, paste0("output/lithology_frac_yield_extracted_",Sys.Date(),".csv"))
