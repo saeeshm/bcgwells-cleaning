@@ -102,28 +102,6 @@ litho_split <- litho %>%
   group_by(wtn_grp) %>%
   group_split()
 
-# Individual tests
-# full_set <- litho_split
-litho |> filter(record_index==469752) |> pull(wtn)
-
-# df <- litho |> filter(wtn == 104154)
-# res <- df |> 
-#   extract_litho_data() |> 
-#   extract_comment_data()
-# # res
-# res |> View()
-
-# Group tests
-# test <- litho_split[sample(1:length(full_set), 20)]
-# out_table_temp <- map(test, extract_litho_data)
-# out_table_temp2 <- map(out_table_temp, extract_comment_data)
-# out_table_temp2 %>% 
-#   bind_rows() %>% 
-#   group_by(wtn_grp) %>% 
-#   arrange(as.numeric(wtn_grp), as.numeric(depth_from), as.numeric(depth_to), as.numeric(record_index)) %>% 
-#   # View()
-#   write_csv('test.csv')
-
 # Checking the row count: If there are more than 10,000 rows being cleaned,
 # using parallel processing.
 if (nrow(litho) > 10000){
@@ -142,42 +120,47 @@ if (nrow(litho) > 10000){
   out_table_temp2 <- map(out_table_temp, extract_comment_data)
 }
 
+# Remove rows where extra rows for frac/yield data have been made but they
+# contain duplicated information (per WTN) - example of this = WTN: 39483
+out_table_temp3 <- map(out_table_temp2, \(df){
+  # Separating newly introduced rows from existing rows
+  new_rows <- df |> 
+    filter(record_index == 999999999) |> 
+    # Keeping only unique ones here too
+    distinct(pick(c('fracture_from', 'fracture_to', 
+                    'single_frac_yield', 'single_frac_yield2')), .keep_all = T)
+  base_rows <- df |> 
+    filter(record_index != 999999999)
+  
+  # Removing rows whose fracture/yield data already exists in the table, and
+  # adding back in only the unique rows
+  new_rows |> 
+    anti_join(base_rows, by=c('fracture_from', 'fracture_to', 
+                              'single_frac_yield', 'single_frac_yield2')) |> 
+    bind_rows(base_rows) |> 
+    arrange(depth_from, depth_to)
+})
+
 # Joining the split table back together and removing the grouping variable
-out_table <- out_table_temp2 %>% 
+out_table <- out_table_temp3 %>% 
   bind_rows() %>% 
   group_by(wtn_grp) %>% 
-  arrange(as.numeric(wtn_grp), as.numeric(depth_from), as.numeric(depth_to), as.numeric(record_index)) %>% 
+  arrange(as.numeric(wtn_grp), depth_from, depth_to, as.numeric(record_index)) %>% 
   distinct() %>% 
   ungroup() %>% 
   mutate(wtn_grp = NULL)
 
-# Remove fractures classified into areas that are not bedrock (these are likely errors)
-
-
 # ==== Tidying final tables ====
 
-# Replacing the original lithology and general remarks columns and also removing
-# the wtn_grp variable
+# Replacing the original lithology and general remarks columns
 out_table <- out_table %>% 
   mutate(lithology = lithology_copy) %>% 
   mutate(lithology_copy = NULL) %>% 
   mutate(general_remarks = general_remarks_copy) %>% 
   mutate(general_remarks_copy = NULL)
 
-# getting the wtns of wells have had issues and need review
-review_wtns <- out_table %>% 
-  filter(single_frac_yield == "review") %>% 
-  pull(wtn) %>% 
-  unique()
-# Joining these with the wells that threw errors
-review_wtns <- unique(c(error_wells$wtn, review_wtns))
-
-# Adding a column titled review to the out_table to indicate which wells need manual review
-out_table <- out_table %>% 
-  mutate(needs_review = ifelse(wtn %in% review_wtns, T, F))
-
 # ==== Saving data to disk and deleting objects from memory ====
-write_csv(out_table, paste0("output/bedrock_table-frac_yield_extracted_",Sys.Date(),".csv"))
+write_csv(out_table, paste0("output/lithology_frac_yield_extracted_",Sys.Date(),".csv"))
 write_csv(error_wells, paste0("output/error_record_table_",Sys.Date(),".csv"))
 # rm(list=ls())
 
