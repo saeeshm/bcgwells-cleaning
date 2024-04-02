@@ -233,3 +233,6 @@ output_table <- litho_cleaned |>
 
 # Saving output to file
 write_csv(output_table, file.path(out_dir, "lithology_matclass_cleaned.csv"))
+
+# Clearing the temp directory
+unlink('temp', recursive=T)
