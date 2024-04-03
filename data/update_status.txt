@@ -1,0 +1,2 @@
+Database last updated on: 2024-03-28 11:45:27.453989
+All tables except lithology are OVERWRITTEN. Lithology table is APPENDED with any new rows/wells

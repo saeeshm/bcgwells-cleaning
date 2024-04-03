@@ -8,5 +8,3 @@ data/bcdata-version/
 output/strater/
 temp/
 options/credentials.json
-*.csv
-*.txt
