@@ -23,6 +23,9 @@ litho_path <- 'output/lithology_matclass_cleaned.csv'
 # Well table path - used for its reference comment information
 well_path <- 'data/well.csv'
 
+# Output directory
+out_dir <- 'output'
+
 # Number of cores for parellel processing
 parallelly::availableCores()
 numCores <- 4
@@ -177,8 +180,8 @@ out_table <- out_table |>
   select(-wb_est, -wb_unit)
 
 # ==== Saving data to disk and deleting objects from memory ====
-write_csv(out_table, paste0("output/lithology_frac_yield_extracted_",Sys.Date(),".csv"))
-write_csv(error_wells, paste0("output/error_record_table_",Sys.Date(),".csv"))
+write_csv(out_table, file.path(out_dir, "lithology_frac_yield_extracted.csv"))
+write_csv(error_wells, file.path(out_dir, "error_record_table.csv"))
 # rm(list=ls())
 
 

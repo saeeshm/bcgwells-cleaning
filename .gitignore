@@ -6,5 +6,6 @@ old_ref_project/
 data/
 output/
 temp/
+options/credentials.json
 *.csv
 *.txt
