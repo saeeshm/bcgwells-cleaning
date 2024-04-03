@@ -26,7 +26,6 @@ paths <- list(
   'pumptest' = 'data/pt_aquifer_parameters.csv'
 )
 
-
 # ==== Reading data ====
 dats <- map(paths, read_csv)
 

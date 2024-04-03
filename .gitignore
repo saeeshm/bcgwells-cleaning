@@ -3,8 +3,9 @@
 *.Rproj
 .DS_STORE
 old_ref_project/
-data/
-output/
+data/old-ref/
+data/bcdata-version/
+output/strater/
 temp/
 options/credentials.json
 *.csv
