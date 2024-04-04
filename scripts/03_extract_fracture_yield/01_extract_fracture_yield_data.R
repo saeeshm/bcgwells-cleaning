@@ -169,6 +169,7 @@ out_table <- out_table %>%
 out_table <- out_table |> 
   left_join(
     litho_og |> 
+      mutate(wtn=as.character(wtn)) %>% 
       select(wtn, depth_from, depth_to, 
              'wb_est' = water_bearing_estimated_flow,
              'wb_unit' = well_yield_unit_code),

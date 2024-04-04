@@ -133,21 +133,21 @@ litho_split <- litho |>
 
 # Testing cleaning functions
 # test <- litho_split
-litho |> filter(!litho$wtn %in% well$well_tag_number)
+# litho |> filter(!litho$wtn %in% well$well_tag_number)
 # test <- which(map(lt4, nrow) == 0)
-df <- litho |> filter(wtn == 17991)
+# df <- litho |> filter(wtn == 17991)
 # df <- lt3[[101974]]
-df <- lt5[[22059]]
+# df <- lt5[[22059]]
 
-df |>
-  clean_0_depth_rows() |>
-  clean_blanks() |>
-  clean_oos_rows() |>
-  # remove_uninformative_rows() |>
-  clean_error_depths() |>
-  invert_mismatched_rows() |>
-  join_dup_ranges() |>
-  check_end_depths(well, well_depth_column = 'finished_well_depth_ft-bgl')
+# df |>
+#   clean_0_depth_rows() |>
+#   clean_blanks() |>
+#   clean_oos_rows() |>
+#   # remove_uninformative_rows() |>
+#   clean_error_depths() |>
+#   invert_mismatched_rows() |>
+#   join_dup_ranges() |>
+#   check_end_depths(well, well_depth_column = 'finished_well_depth_ft-bgl')
 
 # Applying a suite of tidying steps to prepare each well table for matclass
 # cleaning

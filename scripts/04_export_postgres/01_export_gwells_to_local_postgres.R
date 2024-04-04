@@ -5,8 +5,11 @@
 
 # ==== libraries ====
 library(readr)
+library(dplyr)
+library(lubridate)
 library(purrr)
 library(DBI)
+library(rjson)
 library(RSQLite)
 
 # ==== Paths and global variables ====
@@ -26,8 +29,28 @@ paths <- list(
   'pumptest' = 'data/pt_aquifer_parameters.csv'
 )
 
+# Column types list
+ctypes <- list(
+  'litho_cln' = 'ccddcccddcdddc',
+  'litho_raw' = 'cddcccccdcc',
+  # Guessing for well, but these are manually corrected later
+  'well' = '?',
+  'drilling' = 'cc',
+  'screen' = 'cdddcd',
+  'casing' = 'cdddccdc',
+  'liner' = 'cdd',
+  'pumptest' = 'cdDcdcdddddcc'
+)
+
 # ==== Reading data ====
-dats <- map(paths, read_csv)
+dats <- pmap(list(paths, names(paths), ctypes), \(path, tabname, typevec){
+  out <- read_csv(path, col_types=typevec)
+  if(tabname=='well'){
+    out <- out |>
+      mutate(across(contains('date'), lubridate::ymd))
+  }
+  return(out)
+})
 
 # ==== Opening database connection ====
 
@@ -48,9 +71,10 @@ iwalk(dats, \(x, y){
   print(y)
   dbWriteTable(
     conn,
-    DBI::Id(schema = creds$schema, table = "y"),
+    DBI::Id(schema = creds$schema, table = y),
     x,
-    append = F
+    append = F,
+    overwrite=T
   )
 })
 

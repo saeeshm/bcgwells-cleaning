@@ -323,7 +323,7 @@ check_end_depths <- function(df, well, well_depth_column){
   if(nrow(currwell) == 0){
     this_finished_depth <- NA_real_
   }else{
-    this_finished_depth <-currwell |> pull(!!sym(well_depth_column))
+    this_finished_depth <- currwell |> pull(!!sym(well_depth_column))
   }
   
   # Getting the final row - if there is any to-depth bigger than the largest
