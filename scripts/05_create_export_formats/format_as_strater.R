@@ -13,13 +13,25 @@ library(dplyr)
 library(readr)
 library(stringr)
 library(purrr)
+library(rjson)
 library(openxlsx)
-source("scripts/04_create_export_formats/strater_pre_process.R")
+library(DBI)
+library(RPostgres)
+source("scripts/05_create_export_formats/strater_pre_process.R")
 
 # ==== Paths and global variables ====
 
 # Path to where output formatted excel sheet will be stored (for strater)
 strater_out_path <- 'output/strater/strater_formatted.xlsx'
+
+# Postgres credentials path
+creds_path <- 'options/credentials.json'
+
+# Schema
+schema <- 'bcgwells_strater'
+
+# Export location
+export_postgres <- T
 
 # ==== Building formatted tables ====
 
@@ -82,8 +94,8 @@ collar$`Well Diameter` <- well %>%
   mutate(diameter_inches = paste(diameter_inches,"inch -",round(diameter_inches*25.4),"mm")) %>% 
   mutate(diameter_inches = ifelse(str_detect(diameter_inches, "NA"), NA_character_, diameter_inches)) %>% 
   pull(diameter_inches)
-collar$`Date Commenced` <- well$construction_start_date
-collar$`Date Completed` <- well$construction_end_date
+collar$`Date Commenced` <- as.character(ymd(well$construction_start_date))
+collar$`Date Completed` <- as.character(ymd(well$construction_end_date))
 collar$`Total Depth` <- well$`total_depth_drilled_ft-bgl`*0.3048
 collar$`Total Depth (ft)` <- well$`total_depth_drilled_ft-bgl`
 collar$`Depth to bedrock` <- well$`bedrock_depth_ft-bgl`
@@ -101,10 +113,13 @@ print("collar table formatted")
 # the well construction table  --------
 
 # Calling the helper function to iterate over all well tag numbers and generate a strater formatted table
-construction <- map_dfr(unique(well$well_tag_number), format_construction_strater)
+construction <- map_dfr(wtns, format_construction_strater)
 
 # adding project columns
 construction <- construction %>% 
+  group_by(`Hole Id`) |> 
+  arrange(From, To) |> 
+  ungroup() |> 
   mutate("Proj. No." = NA_character_) %>% 
   mutate("Project Name" = NA_character_)
 
@@ -112,7 +127,7 @@ print("construction table formatted")
 
 # Writing the water level table --------
 water_level <- tibble("Hole Id" = well$well_tag_number)
-water_level$Date <- well$construction_end_date
+water_level$Date <- as.character(ymd(well$construction_end_date))
 water_level$Depth <- well$`static_water_level_ft-btoc`*0.3048
 water_level$Description <- well$comments
 water_level$Depth_FT <- well$`static_water_level_ft-btoc`
@@ -120,23 +135,55 @@ water_level$comments <- NA_character_
 
 print("water level table formatted")
 
-# ==== Writing the outputted data as excel ====
+# Creating a named list of output tables for quick export
+otabs <- list(
+  'lithology' = litho_output,
+  "fractured_br" = bedrock_output,
+  "collars" = collar,
+  "well_construction" = construction,
+  "water_level" = water_level
+)
 
-wb <- createWorkbook()
-addWorksheet(wb, "Lithology")
-addWorksheet(wb, "Fractured BR")
-addWorksheet(wb, "Collars")
-addWorksheet(wb, "Well Construction")
-addWorksheet(wb, "water level")
+# ==== Writing the formatted data ====
 
-writeData(wb, "Lithology", litho_output, startRow = 1, startCol = 1, colNames = T)
-writeData(wb, "Fractured BR", bedrock_output, startRow = 1, startCol = 1, colNames = T)
-writeData(wb, "Collars", collar, startRow = 1, startCol = 1, colNames = T)
-writeData(wb, "Well Construction", construction, startRow = 1, startCol = 1, colNames = T)
-writeData(wb, "water level", water_level, startRow = 1, startCol = 1, colNames = T)
+if(export_postgres){
+  # Reading credentials
+  creds <- rjson::fromJSON(file = creds_path)
+  
+  # Opening database connection
+  conn <- dbConnect(
+    RPostgres::Postgres(), 
+    host = creds$host, 
+    dbname = creds$dbname,
+    user = creds$user, 
+    password = creds$password
+  )
+  
+  # Exporting tables to the appropriate schema
+  dbExecute(conn, paste('create schema if not exists', schema))
+  # Creating tables
+  iwalk(otabs, \(x, tabname){
+    print(tabname)
+    dbWriteTable(conn, 
+                 DBI::Id(schema = schema, table = tabname), 
+                 x,
+                 append = F,
+                 overwrite=T)
+  })
+  dbDisconnect(conn)
+}else{
+  # Otherwise creating an export workbook
+  wb <- createWorkbook()
+  iwalk(otabs, \(x, tabname){
+    print(tabname)
+    addWorksheet(wb, tabname)
+    writeData(wb, tabname, x, startRow = 1, startCol = 1, colNames = T)
+  })
+  
+  saveWorkbook(wb, file = strater_out_path, overwrite = TRUE)
+  print("workbook saved")
+}
 
-saveWorkbook(wb, file = strater_out_path, overwrite = TRUE)
 
-print("workbook saved")
 
 

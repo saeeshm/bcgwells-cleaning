@@ -14,7 +14,7 @@ library(dplyr)
 # ==== Paths and global variables ====
 
 # Bedrock lithology cleaned
-litho_path <- 'output/lithology_frac_yield_extracted_2024-04-02.csv'
+litho_path <- 'output/lithology_frac_yield_extracted.csv'
 # Others
 # litho_path <- 'data/lithology.csv'
 well_path <- 'data/well.csv'
@@ -35,7 +35,14 @@ screen <- read_csv(screen_path)
 casing <- read_csv(casing_path)
 liner <- read_csv(liner_path)
 drilling <- read_csv(drilling_path)
-wtns <- read_csv(wtn_input, col_names=F)
+
+# Defaulting to all wells if no input file exists
+if(file.exists(wtn_input)){
+  wtns <- read_csv(wtn_input, col_names=F) |> 
+    pull(X1)
+}else{
+  wtns <- unique(well$well_tag_number)
+}
 
 # ==== Table pre-processing ====
 
@@ -45,7 +52,7 @@ wtns <- read_csv(wtn_input, col_names=F)
 
 # lithology table
 litho <- litho %>% 
-  filter(wtn %in% ifelse(nrow(wtns) > 0, wtns$X1, litho$wtn))
+  filter(wtn %in% wtns)
 
 # Bedrock table
 # bedrock <- bedrock %>% 
@@ -54,7 +61,7 @@ litho <- litho %>%
 # Well table
 well <- well %>% 
   # Filtering
-  filter(well_tag_number %in% ifelse(nrow(wtns) > 0, wtns$X1, litho$wtn)) |> 
+  filter(well_tag_number %in% wtns) |> 
   # Creating a column that contains expanded descriptions for material code
   mutate("surface_seal_mat_code_long" = case_when(
     surface_seal_material_code == "BN_BACKFILL" ~ "bentonite backfill",
@@ -96,7 +103,7 @@ well <- well %>%
 # Casing table
 casing <- casing %>% 
   # Filtering
-  filter(well_tag_number %in% ifelse(nrow(wtns) > 0, wtns$X1, litho$wtn)) |> 
+  filter(well_tag_number %in% wtns) |> 
   # Elaborating codes
   mutate("casing_mat_code_long" = case_when(
     casing_material_code == "STL_PUL_OT" ~ "Steel",
@@ -113,7 +120,7 @@ casing <- casing %>%
 # Screen table
 screen <- screen %>% 
   # Filtering
-  filter(well_tag_number %in% ifelse(nrow(wtns) > 0, wtns$X1, litho$wtn)) |> 
+  filter(well_tag_number %in% wtns) |> 
   # Elaborating codes
   mutate("screen_assembly_code_long" = case_when(
     screen_assembly_type_code == "SCREEN" ~ "Well Screen",
@@ -136,7 +143,7 @@ screen <- screen %>%
 # Drilling table
 drilling <- drilling %>% 
   # Filtering
-  filter(well_tag_number %in% ifelse(nrow(wtns) > 0, wtns$X1, litho$wtn)) |> 
+  filter(well_tag_number %in% wtns) |> 
   # Grouping so as to remove duplicates by combining all descriptions associated with a single wtn into one row
   group_by(well_tag_number) %>% 
   # Combining descriptions
@@ -151,23 +158,13 @@ drilling <- drilling %>%
 # relevant tables. It returns a dataframe containing all of these data formatted
 # in strater format.
 format_construction_strater <- function(wtn){
-  out_row <- tibble(
-    "Hole Id" = numeric(0),
-    "From" = numeric(0),
-    "To" = numeric(0),
-    "Outer Diameter" = numeric(0),
-    "Inner Diameter" = numeric(0),
-    "Offset" = numeric(0),
-    "Construction Keyword" = character(0),
-    "Item" = character(0),
-    "from (ft)" = numeric(0),
-    "to (ft)" = numeric(0)
-  )
-  
+  # Column names for construction table
+  cnames <- c('Hole Id', 'From', 'To', 'Outer Diameter', 'Inner Diameter',
+              'Offset', 'Construction Keyword', 'Item', 'from (ft)', 'to (ft)')
   # Organizing surface seal data
   well_data <- well %>% filter(well_tag_number == wtn)
-  if(!is.na(well_data$surface_seal_material_code)){
-    out_row <- tibble(
+  ss_row <- if(!is.na(well_data$surface_seal_material_code)){
+    tibble(
       "Hole Id" = well_data$well_tag_number,
       "From" = 0,
       "To" = well_data$surface_seal_depth_ft*0.3048,
@@ -178,13 +175,14 @@ format_construction_strater <- function(wtn){
       "Item" = well_data$surface_seal_desc,
       "from (ft)" = 0,
       "to (ft)" = well_data$surface_seal_depth_ft
-    ) %>% 
-      bind_rows(out_row)
+    )
+  }else{
+    tibble()
   }
   
   # Organizing backfill data
-  if(!is.na(well_data$backfill_type)){
-    out_row <- tibble(
+  bf_row <- if(!is.na(well_data$backfill_type)){
+    tibble(
       "Hole Id" = well_data$well_tag_number,
       "From" = 0,
       "To" = well_data$backfill_depth_ft*0.3048,
@@ -194,13 +192,14 @@ format_construction_strater <- function(wtn){
       "Construction Keyword" = "Backfill",
       "Item" = tolower(well_data$backfill_type),
       "from (ft)" = 0,
-      "to (ft)" = well_data$backfill_depth_ft) %>% 
-      bind_rows(out_row)
+      "to (ft)" = well_data$backfill_depth_ft)
+  }else{
+    tibble()
   }
   
   # Organizing filter data
-  if(!is.na(well_data$filter_pack_material_code)){
-    out_row <- tibble(
+  fl_row <- if(!is.na(well_data$filter_pack_material_code)){
+    tibble(
       "Hole Id" = well_data$well_tag_number,
       "From" = well_data$filter_pack_from_ft*0.3048,
       "To" = well_data$filter_pack_to_ft*0.3048,
@@ -214,14 +213,15 @@ format_construction_strater <- function(wtn){
       ),
       "Item" = well_data$filter_pack_desc,
       "from (ft)" = well_data$filter_pack_from_ft,
-      "to (ft)" = well_data$filter_pack_to_ft) %>% 
-      bind_rows(out_row)
+      "to (ft)" = well_data$filter_pack_to_ft)
+  }else{
+    tibble()
   }
   
   # Organizing casing data
   casing_data <- casing %>% filter(wtn == well_tag_number)
-  if(nrow(casing_data) > 0){
-    out_row <- casing_data %>% 
+  cs_row <- if(nrow(casing_data) > 0){
+    casing_data %>% 
       mutate("Hole Id" = well_tag_number,
              "From" = `casing_from_ft-bgl`*0.3048,
              "To" = `casing_to_ft-bgl`*0.3048,
@@ -234,15 +234,16 @@ format_construction_strater <- function(wtn){
                TRUE ~ "Casing"),
              "Item" = desc,
              "from (ft)" = `casing_from_ft-bgl`,
-             "to (ft)" = `casing_to_ft-bgl`) %>% 
-      select(`Hole Id`, From, To, `Outer Diameter`, `Inner Diameter`, `Offset`, `Construction Keyword`, `Item`, `from (ft)`,`to (ft)`) %>% 
-      bind_rows(out_row)
+             "to (ft)" = `casing_to_ft-bgl`) |> 
+      dplyr::select(all_of(cnames))
+  }else{
+    tibble()
   }
   
   # Organizing screen data
   screen_data <- screen %>% filter(wtn == well_tag_number)
-  if(nrow(screen_data) > 0){
-    out_row <- screen_data %>% 
+  sc_row <- if(nrow(screen_data) > 0){
+    screen_data %>% 
       mutate("Hole Id" = well_tag_number,
              "From" = `screen_from_ft-bgl`*0.3048,
              "To" = `screen_to_ft-bgl`*0.3048,
@@ -252,11 +253,14 @@ format_construction_strater <- function(wtn){
              "Construction Keyword" = screen_assembly_code_long,
              "Item" = desc,
              "from (ft)" = `screen_from_ft-bgl`,
-             "to (ft)" = `screen_to_ft-bgl`) %>% 
-      select(`Hole Id`, From, To, `Outer Diameter`, `Inner Diameter`, `Offset`, `Construction Keyword`, `Item`, `from (ft)`,`to (ft)`) %>% 
-      bind_rows(out_row)
+             "to (ft)" = `screen_to_ft-bgl`) |> 
+      dplyr::select(all_of(cnames))
+  }else{
+    tibble()
   }
   
   # Returning the formatted table
-  return(arrange(out_row, From, To))
+  out_tab <- bind_rows(ss_row, bf_row, fl_row, cs_row, sc_row)
+  return(out_tab)
 }
+

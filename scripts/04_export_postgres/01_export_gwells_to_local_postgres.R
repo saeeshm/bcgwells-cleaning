@@ -17,6 +17,9 @@ library(RSQLite)
 # Postgres credentials
 creds_path <- 'options/credentials.json'
 
+# Schema name to use
+schema <- 'bcgwells_tables'
+
 # Path list
 paths <- list(
   'litho_cln' = 'output/lithology_frac_yield_extracted.csv',
@@ -67,11 +70,12 @@ conn <- dbConnect(
 )
 
 # ==== Writing tables to database ====
+dbExecute(conn, paste('create schema if not exists', schema))
 iwalk(dats, \(x, y){
   print(y)
   dbWriteTable(
     conn,
-    DBI::Id(schema = creds$schema, table = y),
+    DBI::Id(schema = schema, table = y),
     x,
     append = F,
     overwrite=T
