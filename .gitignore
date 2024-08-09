@@ -5,7 +5,7 @@
 old_ref_project/
 data/old-ref/
 data/bcdata-version/
-output/strater/
+output/
 temp/
 options/credentials.json
 *.csv
