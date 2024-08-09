@@ -37,7 +37,9 @@ litho_og <- read_csv(litho_path, col_types = "ddddcccc") %>%
   mutate(well_type = NA_character_, general_remarks = NA_character_) %>% 
   dplyr::rename('record_index' = rid, 
                 "depth_from" = from_depth, 
-                "depth_to" = to_depth)
+                "depth_to" = to_depth) |> 
+  # Keeping only relevant columns
+  dplyr::select(wtn, record_index, depth_from, depth_to, lithology, matclass)
 
 # The relevant columns frmo the well dataset, which contains reference comment
 # information that will be used for subsequent data extraction.
@@ -45,18 +47,20 @@ well <- read_csv(well_path) %>% dplyr::select("wtn" = well_tag_number, comments)
 
 # ==== Tidying and formatting dataset for data extraction ====
 
-# Selecting relevant columns as well as filtering only wells that have a bedrock
-# part to them as these will be the only ones where it will be relevant to run
-# frac-yield extraction
-litho <- litho_og %>% 
-  select(wtn, record_index, depth_from, depth_to, lithology, matclass) %>%
-  filter(wtn %in% unique(pull(filter(litho_og, matclass == "bedrock"), wtn)))
-
 # Adding general comment information about each well from the well table (where
 # present)
-litho <- litho |> 
+litho_og <- litho_og |> 
   left_join(well, by='wtn') |> 
   rename('general_remarks' = comments)
+
+# Splitting bedrock wells, as only for these is it relevant to run frac-yield
+# extraction
+litho <- litho_og %>% 
+  filter(wtn %in% unique(pull(filter(litho_og, matclass == "bedrock"), wtn)))
+
+# All other only overburden wells are treated separately
+overburden <- litho_og |> 
+  filter(!wtn %in% unique(litho$wtn))
 
 # Joining the rows back and doing further cleaning
 litho <- litho %>% 
@@ -180,9 +184,14 @@ out_table <- out_table |>
   mutate(unit = ifelse(is.na(unit), wb_unit, unit)) |> 
   select(-wb_est, -wb_unit)
 
+# Joining back the overburden wells with their matclass classifications
+out_table <- out_table |> 
+  bind_rows(overburden) |> 
+  arrange(wtn, depth_from, depth_to)
+
 # ==== Saving data to disk and deleting objects from memory ====
 write_csv(out_table, file.path(out_dir, "lithology_frac_yield_extracted.csv"))
-write_csv(error_wells, file.path(out_dir, "error_record_table.csv"))
+write_csv(error_wells, file.path(out_dir, "litho_error_record_table.csv"))
 # rm(list=ls())
 
 

@@ -24,7 +24,7 @@ schema <- 'bcgwells_tables'
 paths <- list(
   'litho_cln' = 'output/lithology_frac_yield_extracted.csv',
   'litho_raw' = 'data/lithology.csv',
-  'well' = 'data/well.csv',
+  'well' = 'output/gwells_with_dem_elev.csv',
   'drilling' = 'data/drilling_method.csv',
   'screen' = 'data/screen.csv',
   'casing' = 'data/casing.csv',
@@ -82,3 +82,4 @@ iwalk(dats, \(x, y){
   )
 })
 
+dbDisconnect(conn)
